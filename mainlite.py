@@ -4,16 +4,35 @@ import subprocess
 import sys
 from tabulate import tabulate
 
+class MacValidator:
+    @staticmethod
+    def validate(mac):
+        macRegex = '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
+        return bool(re.match(macRegex, mac))
+
 class Networker:
-    def arp(self):
+    def __init__(self):
+        self.arpCache = None
+
+    def getArp(self):
+        if self.arpCache:
+            output = self.arpCache
+            self.__resetCache()
+            return output
+        else:
+            return self.__arp()
+
+    def __arp(self):
         arpScanResult = subprocess.run(
             ['sudo', 'arp-scan', '-l', '-q'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE).stdout.decode()
 
-        return self.convertToDict(arpScanResult)
+        self.arpCache = self.__convertToDict(arpScanResult)
+
+        return self.arpCache
     
-    def convertToDict(self, arpInput):
+    def __convertToDict(self, arpInput):
         arpLines = arpInput.splitlines()
         pattern = r'(?P<ip>192\.168\.\d+\.\d+)\s+(?P<mac>[0-9a-fA-F:]{17})'
 
@@ -28,6 +47,9 @@ class Networker:
                 arpOutput.append({'ip': ip, 'mac': mac})
 
         return arpOutput
+
+    def __resetCache(self):
+        self.arpCache = None
 
 class Table():
     def __init__(self, tableName, isKnownTable, cursor, connection):
@@ -56,46 +78,28 @@ class Table():
         entries = self.getAllEntry()
         print(tabulate(entries))
 
-    def validateMac(self, mac: str) -> bool:
-        if mac in self.getAllList('mac'):
-            print('Duplicate MAC Address')
-            return False
-
-        macRegex = '^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$'
-        if not bool(re.match(macRegex, mac)):
-            print('Invalid MAC Address')
-            return False
-
-        return True
-
     def insertRow(self, nameIp, mac) -> None:
         mac = mac.replace(' ', '')
-        if self.isKnownTable:
+
+        if MacValidator.validate(mac):
             try:
-                if self.validateMac(mac):
+                if self.isKnownTable:
                     self.cursor.execute(f"INSERT INTO {self.tableName} (name, mac) VALUES (?, ?)", (nameIp, mac))
-            except Exception as error:
-                print("Error when inserting query @insertRow:", error)
-                return 1
-
-        elif not self.isKnownTable:
-            try:
-                if self.validateMac(mac):
+                elif not self.isKnownTable:
                     self.cursor.execute(f"INSERT INTO {self.tableName} (ip, mac) VALUES (?, ?)", (nameIp, mac))
-            except Exception as error:
-                print("Error when inserting query @insertRow:", error)
-                return 1
+    
+                self.connection.commit()
 
-        self.connection.commit()
+            except Exception as e:
+                print(f'Error when inserting query @insertRow: {e}')
 
     def updateColumnValueById(self, column: str, value: str, id: int) -> None:
-        print(f'Parameters: column -> {column}, value -> {value}, id -> {id}')
+        try:
+            self.cursor.execute(f"UPDATE {self.tableName} SET {column}=? WHERE id=?", (value, id))
+            self.connection.commit()
 
-        command = f"UPDATE {self.tableName} SET {column}=? WHERE id=?"
-        print(f'Query: {command}')
-
-        self.cursor.execute(command, (value, id))
-        self.connection.commit()
+        except Exception as e:
+            print(f'Error when inserting query @updateColumnValueById: {e}') 
 
     def updateMacById(self, mac, id):
         self.updateColumnValueById('mac', mac, id)
@@ -124,11 +128,10 @@ class DatabaseManager:
     def update(self) -> None:
         self.updateKnownEntry()
         self.updateUnknownEntry()
-        self.deleteDuplicateEntry()
 
     def updateKnownEntry(self) -> None:
         knownEntries = self.knownEntry.getAllEntry()
-        arpResult = self.networker.arp()
+        arpResult = self.networker.getArp()
         
         for knownEntry in knownEntries:
             macFound = False
@@ -144,7 +147,7 @@ class DatabaseManager:
     def updateUnknownEntry(self) -> None:
         knownEntriesMacList = self.knownEntry.getAllList('mac')
         unknownEntriesMacList = self.unknownEntry.getAllList('mac')
-        arpResult = self.networker.arp()
+        arpResult = self.networker.getArp()
 
         for arpDict in arpResult:
             arpMac = arpDict['mac']
@@ -152,22 +155,13 @@ class DatabaseManager:
                     self.unknownEntry.insertRow(arpDict['ip'], arpDict['mac'])
 
     def getNotInEntry(self):
-        arpResult = self.networker.arp()
+        arpResult = self.networker.getArp()
 
         for arpDict in arpResult:
             arpMac = arpDict['mac']
 
             if arpMac not in self.knownEntry.getAllList('mac') and arpMac not in self.unknownEntry.getAllList('mac'):
                 print(arpMac)
-
-    def deleteDuplicateEntry(self) -> None:
-        knownEntryMacList = self.knownEntry.getAllList('mac')
-        unknownEntryMacList = self.unknownEntry.getAllList('mac')
-
-        for unknownEntryMac in unknownEntryMacList:
-            if unknownEntryMac in knownEntryMacList:
-                self.unknownEntry.deleteRowByColumn('mac', unknownEntryMac)
-                print(f"Deleted duplicate IP: {unknownEntryMac}")
 
     def createTables(self):
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS knownEntries (
@@ -258,10 +252,5 @@ def main():
     databaseManager.createTables()
     databaseManager.execute()
 
-    
-
 if __name__ == '__main__':
     main()
-
-# To Do
-# Make it so it deletes 3 days old unknoMacEntries, this works because we will update all unknownEntries on update call instead of only inserting new unknown entries.
