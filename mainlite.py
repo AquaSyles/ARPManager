@@ -3,6 +3,7 @@ import sqlite3
 import subprocess
 import sys
 from tabulate import tabulate
+from commands import *
 
 class MacValidator:
     @staticmethod
@@ -161,6 +162,18 @@ class Database:
     def dict_factory(self, cursor, row):
         return {cursor.description[i][0]: row[i] for i in range(len(row))}
 
+    def getCursor(self):
+        return self.cursor
+
+    def getConnection(self):
+        return self.connection
+
+    def getKnownTableName(self):
+        return self.knownTableName
+
+    def getUnknownTableName(self):
+        return self.unknownTableName
+
     def getNotInEntry(self):
         arpResult = self.networker.getArp()
 
@@ -188,148 +201,11 @@ class Database:
 
         self.connection.commit()
 
-    def getCursor(self):
-        return self.cursor
-
-    def getConnection(self):
-        return self.connection
-
-    def getKnownTableName(self):
-        return self.knownTableName
-
-    def getUnknownTableName(self):
-        return self.unknownTableName
-
-class Command:
-    def execute(self):
-        pass
-
-class HelpCommand(Command):
-    @staticmethod
-    def execute():
-        help_text = """
-Usage: python script.py [COMMAND] [OPTIONS]
-
-Commands:
-    -s [known|unknown]    Show all entries from the specified table (known or unknown).
-    -u [known|unknown]    Update the specified table (known or unknown) based on ARP scan.
-    -i [known|unknown]    Insert a new entry into the specified table (known or unknown).
-                        For known: provide 'name' and 'mac'.
-                        For unknown: provide 'ip' and 'mac'.
-    -d [known|unknown]    Delete a row from the specified table (known or unknown) by column value.
-                        Specify the column name and value for deletion.
-
-Examples:
-    python script.py -s known       # Display entries from the 'known' table.
-    python script.py -u unknown     # Update the 'unknown' table based on ARP scan.
-    python script.py -i known 'Device1' '00:1A:2B:3C:4D:5E'  # Insert a known entry with name and MAC.
-    python script.py -d unknown ip '192.168.1.100'  # Delete an unknown entry based on IP address.
-
-Notes:
-    - The ARP scan is used to update the IP addresses for known MAC addresses.
-    - The program works with a SQLite database, and changes are saved persistently.
-        """
-        print(help_text)
-
-    @staticmethod
-    def insert():
-        print("""
--i [known|unknown]    Insert a new entry into the specified table (known or unknown).
-    For known: provide 'name' and 'mac'.
-    For unknown: provide 'ip' and 'mac'.
-            """)
-
-class UpdateCommand(Command):
-    def __init__(self, knownTable, unknownTable, networker):
-        self.tableUpdater = TableUpdater(knownTable, unknownTable, networker)
-
-    def execute(self, args=None):
-        if not args:
-            self.tableUpdater.updateKnownEntry()
-            self.tableUpdater.updateUnknownEntry()
-
-        elif args[0] == 'known':
-            self.tableUpdater.updateKnownEntry()
-
-        elif args[0] == 'unknown':
-            self.tableUpdater.updateUnknownEntry()
-
-class SelectCommand(Command):
-    def __init__(self, knownTable, unknownTable):
-        self.knownTable = knownTable
-        self.unknownTable = unknownTable
-
-    def execute(self, args=None):
-        if not args:
-            self.unknownTable.select()
-            self.knownTable.select()
-
-        elif args[0] == 'known':
-            self.knownTable.select()
-
-        elif args[0] == 'unknown':
-            self.unknownTable.select()
-
-class InsertCommand(Command):
-    def __init__(self, knownTable, unknownTable):
-        self.knownTable = knownTable
-        self.unknownTable = unknownTable
-
-    def execute(self, args):
-        try:
-            table = args[0]
-            nameIp = args[1]
-            mac = args[2]
-
-            if table == 'known':
-                self.knownTable.insertRow(nameIp, mac)
-            elif table == 'unknown':
-                self.unknownTable.insertRow(nameIp, mac)
-
-        except Exception as e:
-            HelpCommand.insert()
-            print(f'Invalid args: {e}')
-
-class CommandDispatcher:
-    def __init__(self, database):
-        self.knownTable = Table(database.getKnownTableName(), 1, database.getCursor(), database.getConnection())
-        self.unknownTable = Table(database.getUnknownTableName(), 0, database.getCursor(), database.getConnection())
-
-        self.networker = Networker()
-
-        self.commands = {
-            '-u': UpdateCommand(self.knownTable, self.unknownTable, self.networker),
-            '-s': SelectCommand(self.knownTable, self.unknownTable),
-            '-i': InsertCommand(self.knownTable, self.unknownTable),
-            '-h': HelpCommand()
-        }
-
-    def dispatch(self):
-        sysArgs = sys.argv
-        if len(sysArgs) > 1:
-            command = sysArgs[1]
-            
-            if command in self.commands:
-                commandClass = self.commands[command]
-            else:
-                print(f'Unknown command: {command}')
-                return 1
-
-            args = None if not len(sysArgs) > 2 else sysArgs[2:len(sysArgs)]
-
-            if args:
-                commandClass.execute(args)
-            else:
-                commandClass.execute()
-
-        else:
-            print("Missing command.")
-
 def main():
     database = Database('knownEntries', 'unknownEntries')
     database.createTables()
 
-    commandDispatcher = CommandDispatcher(database)
+    commandDispatcher = CommandDispatcher(database, Table, Networker, TableUpdater)
     commandDispatcher.dispatch()
 
 if __name__ == '__main__':
