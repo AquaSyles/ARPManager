@@ -105,6 +105,19 @@ class Table():
         except Exception as e:
             print(f'Error when inserting query @updateColumnValueById: {e}') 
 
+    def updateColumnValueByColumn(self, whereColumn, whereValue, column, value) -> None:
+        try:
+            if column == 'mac':
+                if not MacValidator.validate(value):
+                    print("Invalid MAC Address")
+                    return 0
+
+            self.cursor.execute(f"UPDATE {self.tableName} SET {column}=? WHERE {whereColumn}=?", (value, whereValue))
+            self.connection.commit()
+
+        except Exception as e:
+            print(f'Error when inserting query @updateColumnValueById: {e}') 
+
     def updateMacById(self, mac, id):
         self.updateColumnValueById('mac', mac, id)
     

@@ -26,17 +26,19 @@ Commands:
     {1}
     {2}
     {3}
+    {4}
 
 Examples:
     python script.py -s known       # Display entries from the 'known' table.
     python script.py -u unknown     # Update the 'unknown' table based on ARP scan.
     python script.py -i known 'Device1' '00:1A:2B:3C:4D:5E'  # Insert a known entry with name and MAC.
     python script.py -d unknown ip '192.168.1.100'  # Delete an unknown entry based on IP address.
+    python script.py -uc known mac '00:1A:2B:3C:4D:5E' ip '192.168.1.101' # Updates the 'ip' column in the 'known' table where 'mac' matches '00:1A:2B:3C:4D:5E'.
 
 Notes:
     - The ARP scan is used to update the IP addresses for known MAC addresses.
     - The program works with a SQLite database, meaning the changes are saved persistently.
-""".format(HelpCommand.getSelect(), HelpCommand.getUpdate(), HelpCommand.getInsert(), HelpCommand.getDelete()))
+""".format(HelpCommand.getSelect(), HelpCommand.getUpdate(), HelpCommand.getInsert(), HelpCommand.getDelete(), HelpCommand.getUpdateColumn()))
 
     @staticmethod
     def getInsert():
@@ -56,6 +58,11 @@ Notes:
     @staticmethod
     def getSelect():
         return """-s [known|unknown]    Show all entries from the specified table (known or unknown)."""
+    
+    @staticmethod
+    def getUpdateColumn():
+        return """-uc [known|unknown] [whereColumn] [whereValue] [column] [value]    Update a specific column in the specified table (known or unknown)."""
+
 
 class UpdateCommand(Command):
     def __init__(self, knownTable, unknownTable, networker, TableUpdater):
@@ -123,7 +130,7 @@ class InsertCommand(Command):
     def execute(self, args):
         if not len(args) == 3:
             print(HelpCommand.getInsert())
-            print(f'Invalid args: {e}')
+            print('Invalid args')
             return 0
 
         table = args[0]
@@ -139,6 +146,30 @@ class InsertCommand(Command):
                 print(HelpCommand.getInsert())
                 print(f'Invalid options: {e}')
 
+class UpdateColumnCommand(Command):
+    def __init__(self, knownTable, unknownTable):
+        self.knownTable = knownTable
+        self.unknownTable = unknownTable
+
+    def execute(self, args):
+        if not len(args) == 5:
+            print('Invalid args')
+            return 0
+
+        table = args[0]
+        whereColumn = args[1]
+        whereValue = args[2]
+        column = args[3]
+        value = args[4]
+
+        table = Command.getCommandTable(table, HelpCommand.getUpdateColumn, self)
+
+        if table:
+            try:
+                table.updateColumnValueByColumn(whereColumn, whereValue, column, value)
+            except:
+                print(HelpCommand.getUpdateColumn())
+
 class CommandDispatcher:
     def __init__(self, database, Table, Networker, TableUpdater):
         self.knownTable = Table(database.getKnownTableName(), 1, database.getCursor(), database.getConnection())
@@ -151,6 +182,7 @@ class CommandDispatcher:
             '-s': SelectCommand(self.knownTable, self.unknownTable),
             '-i': InsertCommand(self.knownTable, self.unknownTable),
             '-d': DeleteCommand(self.knownTable, self.unknownTable),
+            '-uc': UpdateColumnCommand(self.knownTable, self.unknownTable),
             '-h': HelpCommand()
         }
 
