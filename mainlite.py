@@ -104,6 +104,7 @@ class Table():
                 self.connection.commit()
 
             except Exception as e:
+                print(f'Error with MAC address: {mac}')
                 print(f'Error when inserting query @insertRow: {e}')
 
         else:
