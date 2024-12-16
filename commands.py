@@ -103,7 +103,7 @@ class DeleteCommand(Command):
             print('Invalid args')
             return 0
 
-        table = Command.getCommandTable(args[0], self)
+        table = Command.getCommandTable(args[0], HelpCommand.getDelete, self)
 
         if not table:
             return 0
@@ -130,7 +130,7 @@ class InsertCommand(Command):
         nameIp = args[1]
         mac = args[2]
 
-        table = Command.getCommandTable(table, self)
+        table = Command.getCommandTable(table, HelpCommand.getInsert, self)
 
         if table:
             try:

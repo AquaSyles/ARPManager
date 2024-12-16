@@ -150,6 +150,16 @@ class TableUpdater:
             if arpMac not in knownEntriesMacList and arpMac not in unknownEntriesMacList:
                     self.unknownEntry.insertRow(arpDict['ip'], arpDict['mac'])
 
+        self.deleteDuplicateEntry()
+
+    def deleteDuplicateEntry(self) -> None:
+        knownEntriesMacList = self.knownEntry.getAllList('mac')
+        unknownEntriesMacList = self.unknownEntry.getAllList('mac')
+
+        for unknownMac in unknownEntriesMacList:
+            if unknownMac in knownEntriesMacList:
+                self.unknownEntry.deleteRowByColumn('mac', unknownMac)
+
 class Database:
     def __init__(self, knownTableName, unknownTableName):
         self.connection = sqlite3.connect('arp.db')
