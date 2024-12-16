@@ -77,6 +77,16 @@ class Table():
                 raise KeyError(f"Column '{column}' does not exist in table '{self.tableName}' entries.")
         return outputList
 
+    def getEntryByColumn(self, column, value):
+        try:
+            self.cursor.execute(f"SELECT * FROM {self.tableName} WHERE {column}=?", (value,))
+            entry = self.cursor.fetchone()
+
+            return entry
+
+        except Exception as e:
+            print(f"Error in deleteRowByColumn: {e}")
+
     def select(self):
         entries = self.getAllEntry()
         print(tabulate(entries))
@@ -162,8 +172,12 @@ class TableUpdater:
 
         for arpDict in arpResult:
             arpMac = arpDict['mac']
-            if arpMac not in knownEntriesMacList and arpMac not in unknownEntriesMacList:
+            if arpMac not in knownEntriesMacList:
+                if arpMac not in unknownEntriesMacList:
                     self.unknownEntry.insertRow(arpDict['ip'], arpDict['mac'])
+                elif arpMac in unknownEntriesMacList:
+                    newTime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    self.unknownEntry.updateColumnValueById('time', newTime, self.unknownEntry.getEntryByColumn('mac', arpMac)['id'])
 
         self.deleteDuplicateEntry()
 
