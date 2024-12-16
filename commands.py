@@ -69,6 +69,8 @@ class UpdateCommand(Command):
         self.tableUpdater = TableUpdater(knownTable, unknownTable, networker)
 
     def execute(self, args=None):
+        self.tableUpdater.deleteOldUnknownEntry()
+
         if not args:
             self.tableUpdater.updateKnownEntry()
             self.tableUpdater.updateUnknownEntry()

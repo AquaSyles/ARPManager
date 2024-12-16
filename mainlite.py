@@ -4,6 +4,7 @@ import subprocess
 import sys
 import os
 from tabulate import tabulate
+from datetime import datetime, timedelta
 from commands import *
 
 class MacValidator:
@@ -174,6 +175,18 @@ class TableUpdater:
             if unknownMac in knownEntriesMacList:
                 self.unknownEntry.deleteRowByColumn('mac', unknownMac)
 
+    def deleteOldUnknownEntry(self) -> None:
+        unknownEntryList = self.unknownEntry.getAllEntry()
+
+        for unknownEntryDict in unknownEntryList:
+            
+            unknownEntryTime = datetime.strptime(unknownEntryDict['time'], "%Y-%m-%d %H:%M:%S")
+            currentTime = datetime.now()
+            timeDelta = timedelta(days=2)
+
+            if unknownEntryTime < currentTime - timeDelta: # unknown entry was made more than timeDelta minutes ago
+                self.unknownEntry.deleteRowByColumn('id', unknownEntryDict['id'])
+
 class Database:
     def __init__(self, databasePath, knownTableName, unknownTableName):
         self.connection = sqlite3.connect(databasePath)
@@ -198,14 +211,14 @@ class Database:
     def getUnknownTableName(self):
         return self.unknownTableName
 
-    def getNotInEntry(self):
-        arpResult = self.networker.getArp()
+    # def getNotInEntry(self):
+    #     arpResult = self.networker.getArp()
 
-        for arpDict in arpResult:
-            arpMac = arpDict['mac']
+    #     for arpDict in arpResult:
+    #         arpMac = arpDict['mac']
 
-            if arpMac not in self.knownEntry.getAllList('mac') and arpMac not in self.unknownEntry.getAllList('mac'):
-                print(arpMac)
+    #         if arpMac not in self.knownEntry.getAllList('mac') and arpMac not in self.unknownEntry.getAllList('mac'):
+    #             print(arpMac)
 
     def createTables(self):
         self.cursor.execute(f'''CREATE TABLE IF NOT EXISTS {self.knownTableName} (
