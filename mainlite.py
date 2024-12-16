@@ -2,6 +2,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+import os
 from tabulate import tabulate
 from commands import *
 
@@ -174,8 +175,8 @@ class TableUpdater:
                 self.unknownEntry.deleteRowByColumn('mac', unknownMac)
 
 class Database:
-    def __init__(self, knownTableName, unknownTableName):
-        self.connection = sqlite3.connect('arp.db')
+    def __init__(self, databasePath, knownTableName, unknownTableName):
+        self.connection = sqlite3.connect(databasePath)
         self.connection.row_factory = self.dict_factory
         self.cursor = self.connection.cursor()
 
@@ -225,7 +226,8 @@ class Database:
         self.connection.commit()
 
 def main():
-    database = Database('knownEntries', 'unknownEntries')
+    databasePath = os.path.join(os.path.dirname(__file__), 'arp.db')
+    database = Database(databasePath, 'knownEntries', 'unknownEntries')
     database.createTables()
 
     commandDispatcher = CommandDispatcher(database, Table, Networker, TableUpdater)
