@@ -25,17 +25,29 @@ class Networker:
         else:
             return self.__arp()
 
+    @staticmethod
+    def getUncachedArp():
+        arpScanResult = subprocess.run(
+            ['sudo', 'arp-scan', '-l', '-q'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE).stdout.decode()
+
+        convertedArpScanResult = Networker.__convertToDict(arpScanResult)
+
+        return convertedArpScanResult
+
     def __arp(self):
         arpScanResult = subprocess.run(
             ['sudo', 'arp-scan', '-l', '-q'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE).stdout.decode()
 
-        self.arpCache = self.__convertToDict(arpScanResult)
+        self.arpCache = Networker.__convertToDict(arpScanResult)
 
         return self.arpCache
     
-    def __convertToDict(self, arpInput):
+    @staticmethod
+    def __convertToDict(arpInput):
         arpLines = arpInput.splitlines()
         pattern = r'(?P<ip>192\.168\.\d+\.\d+)\s+(?P<mac>[0-9a-fA-F:]{17})'
 
@@ -202,6 +214,20 @@ class TableUpdater:
             if unknownEntryTime < currentTime - timeDelta: # unknown entry was made more than timeDelta minutes ago
                 self.unknownEntry.deleteRowByColumn('id', unknownEntryDict['id'])
 
+class NetworkInfo:
+    def __init__(self, knownTable, unknownTable):
+        self.knownTable = knownTable
+        self.unknownTable = unknownTable
+
+    def getNotDatabaseEntry(self):
+        arpResult = Networker.getUncachedArp()
+
+        for arpDict in arpResult:
+            arpMac = arpDict['mac']
+
+            if arpMac not in self.knownTable.getAllList('mac') and arpMac not in self.unknownTable.getAllList('mac'):
+                print(arpDict)
+
 class Database:
     def __init__(self, databasePath, knownTableName, unknownTableName):
         self.connection = sqlite3.connect(databasePath)
@@ -226,15 +252,6 @@ class Database:
     def getUnknownTableName(self):
         return self.unknownTableName
 
-    # def getNotInEntry(self):
-    #     arpResult = self.networker.getArp()
-
-    #     for arpDict in arpResult:
-    #         arpMac = arpDict['mac']
-
-    #         if arpMac not in self.knownEntry.getAllList('mac') and arpMac not in self.unknownEntry.getAllList('mac'):
-    #             print(arpMac)
-
     def createTables(self):
         self.cursor.execute(f'''CREATE TABLE IF NOT EXISTS {self.knownTableName} (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -258,7 +275,7 @@ def main():
     database = Database(databasePath, 'knownEntries', 'unknownEntries')
     database.createTables()
 
-    commandDispatcher = CommandDispatcher(database, Table, Networker, TableUpdater)
+    commandDispatcher = CommandDispatcher(database, Table, Networker, TableUpdater, NetworkInfo)
     commandDispatcher.dispatch()
 
 if __name__ == '__main__':

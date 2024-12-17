@@ -172,20 +172,29 @@ class UpdateColumnCommand(Command):
             except:
                 print(HelpCommand.getUpdateColumn())
 
+class NetworkInfoCommand(Command):
+    def __init__(self, NetworkInfo):
+        self.networkInfo = NetworkInfo
+
+    def execute(self):
+        self.networkInfo.getNotDatabaseEntry()
+
 class CommandDispatcher:
-    def __init__(self, database, Table, Networker, TableUpdater):
+    def __init__(self, database, Table, Networker, TableUpdater, NetworkInfo):
         self.knownTable = Table(database.getKnownTableName(), 1, database.getCursor(), database.getConnection())
         self.unknownTable = Table(database.getUnknownTableName(), 0, database.getCursor(), database.getConnection())
 
         self.networker = Networker()
+        self.networkInfo = NetworkInfo(self.knownTable, self.unknownTable)
 
         self.commands = {
+            '-h': HelpCommand(),
             '-u': UpdateCommand(self.knownTable, self.unknownTable, self.networker, TableUpdater),
             '-s': SelectCommand(self.knownTable, self.unknownTable),
             '-i': InsertCommand(self.knownTable, self.unknownTable),
             '-d': DeleteCommand(self.knownTable, self.unknownTable),
             '-uc': UpdateColumnCommand(self.knownTable, self.unknownTable),
-            '-h': HelpCommand()
+            '-ni': NetworkInfoCommand(self.networkInfo),
         }
 
     def dispatch(self):
